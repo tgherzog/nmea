@@ -2,10 +2,11 @@
 '''
 Usage:
     emulator.py tcp [--port=PORT] [--types=TYPES]
-    emulator.py udp [--port=PORT] [--types=TYPES]
+    emulator.py udp [--port=PORT] [--address=IP] [--types=TYPES]
 
 Options:
     --port=PORT        port number [default: 55554]
+    --address=IP       broadcast address [default: 255.255.255.255]
     --types=TYPES      sentences to send: see list [default: WIMWD,PSTW,SDDBK]
 
 Supported sentences:
@@ -133,7 +134,7 @@ if __name__ == '__main__':
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        print('> Broadcasting via UDP on port {}'.format(port))
+        print('> Broadcasting via UDP on {}:{}'.format(config['--address'], port))
     else:
         sys.exit('Config error')
 
@@ -160,7 +161,7 @@ if __name__ == '__main__':
                         print('> {} open connections'.format(len(clients) - clients.count(None)))
 
         elif config['udp']:
-            s.sendto(bytes((nmea+'\r\n').encode('utf-8')), ('255.255.255.255', port))
+            s.sendto(bytes((nmea+'\r\n').encode('utf-8')), (config['--address'], port))
         
     while sending:
         if config['tcp']:
