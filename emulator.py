@@ -20,6 +20,7 @@ Supported sentences:
 
 from docopt import docopt
 import socket
+import select
 import time
 import random
 import sys
@@ -117,53 +118,66 @@ if __name__ == '__main__':
         ip = s.getsockname()[0]
         s.close()
 
+        clients = [None] * 10
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         s.bind((ip, port))
-        s.listen(1)
-        print('Listening for TCP connections on {}:{}'.format(ip, port))
-        print('Type Ctrl-C to quit')
-        try:
-            conn,addr = s.accept()
-            print('Connection open: {}:{}'.format(addr[0], addr[1]))
-        except:
-            s.close()
-            sys.exit(0)
+        s.listen(len(clients))
+        print('> Listening for TCP connections on {}:{}'.format(ip, port))
+        print('> Type Ctrl-C to quit')
 
     elif config['udp']:
+        clients = []
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         s.setblocking(False)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        print('Broadcasting via UDP on port {}'.format(port))
-        conn = None
+        print('> Broadcasting via UDP on port {}'.format(port))
     else:
         sys.exit('Config error')
 
 
     def send(nmea):
-        global conn, sending
+        global sending, clients
+
+        if not sending:
+            return
 
         nmea += checksum(nmea)
+        print(nmea)
         if config['tcp'] and conn:
-            try:
-                print(nmea)
-                conn.send(bytes((nmea+'\r\n').encode('utf-8')))
-            except KeyboardInterrupt:
-                conn.shutdown(socket.SHUT_RDWR)
-                conn.close()
-                conn = None
-                sending = False
-            except Exception as err:
-                print('Error ({})'.format(err))
-                conn = None
-                sending = False
+            for i in range(len(clients)):
+                if clients[i] is not None:
+                    try:
+                        clients[i].send(bytes((nmea+'\r\n').encode('utf-8')))
+                    except KeyboardInterrupt:
+                        sending = False
+                        return
+                    except Exception as err:
+                        clients[i] = None
+                        print('> Connection closed ({})'.format(err))
+                        print('> {} open connections'.format(len(clients) - clients.count(None)))
 
         elif config['udp']:
-            print(nmea)
             s.sendto(bytes((nmea+'\r\n').encode('utf-8')), ('255.255.255.255', port))
         
     while sending:
+        if config['tcp']:
+            # check for new clients
+            readable,writable,errored = select.select([s] + [i for i in clients if i is not None], [], [], 0)
+            for elem in readable:
+                if elem is s:
+                    conn,addr = s.accept()
+                    for i in range(len(clients)):
+                        if clients[i] is None:
+                            clients[i] = conn
+                            break
+
+                    print('> New Connection from {}'.format(addr))
+                    print('> {} open connections'.format(len(clients) - clients.count(None)))
+
+
         # generate all values at once to avoid confusion
         apparentWindAngle = ang_norm(initWindDir + random.randint(-windDirVar, windDirVar))
         apparentWindSpeed  = initWindSpeed + random.randint(-windSpeedVar*10, windSpeedVar*10) / 10
@@ -209,8 +223,9 @@ if __name__ == '__main__':
         except:
             sending = False
 
-    if conn:
-        conn.shutdown(socket.SHUT_RDWR)
-        conn.close()
+    for conn in clients:
+        if conn is not None:
+            conn.shutdown(socket.SHUT_RDWR)
+            conn.close()
         
     s.close()
