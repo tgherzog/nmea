@@ -1,13 +1,14 @@
 
 '''
-client.py - basic TCP client listener
+client.py - basic TCP/UDP client listener
 
 Usage:
-    client.py [--address=addr] [--port=port]
+    client.py tcp --address=IP [--port=PORT]
+    client.py udp [--port=PORT]
 
 Options:
-    --address=addr         TCP address: [default: localhost]
-    --port=port            Port [default: 5001]
+    --address=IP           TCP address: [default: localhost]
+    --port=PORT            Port [default: 55554]
 
 '''
 
@@ -16,10 +17,17 @@ from docopt import docopt
 
 config = docopt(__doc__)
 
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-print('Connecting to {} on port {}'.format(config['--address'], config['--port']))
-s.connect((config['--address'], int(config['--port'])))
+if config['tcp']:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    print('TCP connection to {} on port {}'.format(config['--address'], config['--port']))
+    s.connect((config['--address'], int(config['--port'])))
+else:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    print('UDP connection on port {}'.format(config['--port']))
+    s.bind(('0.0.0.0', int(config['--port'])))
 
 while True:
     buf = s.recv(1024)
