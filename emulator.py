@@ -1,13 +1,14 @@
 
 '''
 Usage:
-    emulator.py tcp [--port=PORT] [--types=TYPES]
-    emulator.py udp [--port=PORT] [--address=IP] [--types=TYPES]
+    emulator.py tcp [--port=PORT] [--types=TYPES] [--timer=DELAY]
+    emulator.py udp [--port=PORT] [--address=IP] [--types=TYPES] [--timer=DELAY]
 
 Options:
     --port=PORT        port number [default: 55554]
     --address=IP       broadcast address [default: 255.255.255.255]
     --types=TYPES      sentences to send: see list [default: WIMWD,PSTW,SDDBK]
+    -t --timer=DELAY   seconds delay between sentence clusters [default: 1.0]
 
 Supported sentences:
     WIMWD
@@ -178,6 +179,9 @@ if __name__ == '__main__':
                     print('> New Connection from {}'.format(addr))
                     print('> {} open connections'.format(len(clients) - clients.count(None)))
 
+            if len(clients) - clients.count(None) == 0:
+                continue
+
 
         # generate all values at once to avoid confusion
         apparentWindAngle = ang_norm(initWindDir + random.randint(-windDirVar, windDirVar))
@@ -220,7 +224,7 @@ if __name__ == '__main__':
             send('$SDDBS,{:.1f},f,{:.1f},M,{:.1f},F'.format(d/12, d*.0254, d/72))
 
         try:
-            time.sleep(1.0)
+            time.sleep(float(config['--timer']))
         except:
             sending = False
 
