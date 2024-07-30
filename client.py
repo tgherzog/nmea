@@ -3,12 +3,13 @@
 client.py - basic TCP/UDP client listener
 
 Usage:
-    client.py tcp --address=IP [--port=PORT]
-    client.py udp [--port=PORT]
+    client.py tcp --address=IP [--port=PORT] [--hex]
+    client.py udp [--port=PORT] [--hex]
 
 Options:
     --address=IP           TCP address: [default: localhost]
     --port=PORT            Port [default: 55554]
+    --hex                  Include hex dump
 
 '''
 
@@ -35,4 +36,8 @@ while True:
         print('Connection closed - bye')
         break
 
-    print(buf.decode('utf8'), end='')
+    z = buf.decode('utf8')
+    print(z, end='')
+    if config['--hex']:
+        print(''.join([c + '  ' for c in z.strip('\r\n')]))
+        print(' '.join("{:02X}".format(ord(c)) for c in z))
