@@ -1,10 +1,11 @@
 
 '''
 Usage:
-    emulator.py tcp [--port=PORT] [--types=TYPES] [--timer=DELAY]
-    emulator.py udp [--port=PORT] [--address=IP] [--types=TYPES] [--timer=DELAY]
+    emulator.py tcp [--port=PORT] [--data=FILE] [--types=TYPES] [--timer=DELAY]
+    emulator.py udp [--port=PORT] [--address=IP] [--data=FILE] [--types=TYPES] [--timer=DELAY]
 
 Options:
+    --data=FILE        source data from file; overrides --types
     --port=PORT        port number [default: 55554]
     --address=IP       broadcast address [default: 255.255.255.255]
     --types=TYPES      sentences to send: see list [default: WIMWD,PSTW,SDDBK]
@@ -113,6 +114,12 @@ if __name__ == '__main__':
     conn = None
     sending = True
 
+    if config['--data']:
+        fd = open(config['--data'], 'r')
+        fd.seek(0, 2)  # end of file
+        fd_len = fd.tell()
+        fd.seek(0, 0)
+
     if config['tcp']:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.settimeout(0)
@@ -183,45 +190,51 @@ if __name__ == '__main__':
                 continue
 
 
-        # generate all values at once to avoid confusion
-        apparentWindAngle = ang_norm(initWindDir + random.randint(-windDirVar, windDirVar))
-        apparentWindSpeed  = initWindSpeed + random.randint(-windSpeedVar*10, windSpeedVar*10) / 10
-        (trueWindAngle,trueWindSpeed) = true_from_apparent(apparentWindAngle,apparentWindSpeed, sog)
-        apparentWindAngleToNorth = apparentWindAngle + cog
-        trueWindAngleToNorth = trueWindAngle + cog
+        if config['--data']:
+            if fd.tell() == fd_len:
+                break
 
-        depth = initDBT + random.randint(-depthVar, depthVar)
+            send(fd.readline().split('*')[0])
+        else:
+            # generate all values at once to avoid confusion
+            apparentWindAngle = ang_norm(initWindDir + random.randint(-windDirVar, windDirVar))
+            apparentWindSpeed  = initWindSpeed + random.randint(-windSpeedVar*10, windSpeedVar*10) / 10
+            (trueWindAngle,trueWindSpeed) = true_from_apparent(apparentWindAngle,apparentWindSpeed, sog)
+            apparentWindAngleToNorth = apparentWindAngle + cog
+            trueWindAngleToNorth = trueWindAngle + cog
 
-        # MWD: true wind speed & direction (relative to compass north)
-        if 'WIMWD' in types:
-            ang = int(round(trueWindAngleToNorth,0))
-            spd = trueWindSpeed
-            send('$WIMWD,{},T,{},M,{:.1f},N,{:.1f},M'.format(ang, ang+11, spd, spd*0.51444))
+            depth = initDBT + random.randint(-depthVar, depthVar)
 
-        # PSTW: apparent wind speed & direction (relative to compass north)
-        if 'PSTW' in types:
-            ang = int(round(apparentWindAngleToNorth,0))
-            spd = apparentWindSpeed
-            send('$PSTW,{},T,{},M,{:.1f},N,{:.1f},M'.format(ang, ang+11, spd, spd*0.51444))
+            # MWD: true wind speed & direction (relative to compass north)
+            if 'WIMWD' in types:
+                ang = int(round(trueWindAngleToNorth,0))
+                spd = trueWindSpeed
+                send('$WIMWD,{},T,{},M,{:.1f},N,{:.1f},M'.format(ang, ang+11, spd, spd*0.51444))
 
-        # WMV: apparent wind speed & direction (relative to heading)
-        if 'WIMWV' in types:
-            ang = int(round(apparentWindAngle,0))
-            spd = apparentWindSpeed
-            send('$WIMWV,{},R,{:.1f},N,A'.format(ang, spd))
+            # PSTW: apparent wind speed & direction (relative to compass north)
+            if 'PSTW' in types:
+                ang = int(round(apparentWindAngleToNorth,0))
+                spd = apparentWindSpeed
+                send('$PSTW,{},T,{},M,{:.1f},N,{:.1f},M'.format(ang, ang+11, spd, spd*0.51444))
+
+            # WMV: apparent wind speed & direction (relative to heading)
+            if 'WIMWV' in types:
+                ang = int(round(apparentWindAngle,0))
+                spd = apparentWindSpeed
+                send('$WIMWV,{},R,{:.1f},N,A'.format(ang, spd))
 
 
-        if 'SDDBT' in types:
-            d = depth
-            send('$SDDBT,{:.1f},f,{:.1f},M,{:.1f},F'.format(d/12, d*.0254, d/72))
+            if 'SDDBT' in types:
+                d = depth
+                send('$SDDBT,{:.1f},f,{:.1f},M,{:.1f},F'.format(d/12, d*.0254, d/72))
 
-        if 'SDDBK' in types:
-            d = depth+dbsOffset-draft
-            send('$SDDBK,{:.1f},f,{:.1f},M,{:.1f},F'.format(d/12, d*.0254, d/72))
+            if 'SDDBK' in types:
+                d = depth+dbsOffset-draft
+                send('$SDDBK,{:.1f},f,{:.1f},M,{:.1f},F'.format(d/12, d*.0254, d/72))
 
-        if 'SDDBS' in types:
-            d = depth+dbsOffset
-            send('$SDDBS,{:.1f},f,{:.1f},M,{:.1f},F'.format(d/12, d*.0254, d/72))
+            if 'SDDBS' in types:
+                d = depth+dbsOffset
+                send('$SDDBS,{:.1f},f,{:.1f},M,{:.1f},F'.format(d/12, d*.0254, d/72))
 
         try:
             time.sleep(float(config['--timer']))
